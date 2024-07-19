@@ -45,7 +45,7 @@ class RecordVideo(QtCore.QObject):
 
         read, data = self.camera.read()
         if read:
-            cv2.imwrite('a.png', data)
+            cv2.imwrite('optical_text_image.png', data)
             img = Image.fromarray(data)
             img.load()
 
@@ -54,8 +54,8 @@ class RecordVideo(QtCore.QObject):
             if len(text) > 0:
                 tts = gTTS(text=text, lang='en')  # for english language use (lang='en')
                 print(tts)
-                tts.save("pcvoice.mp3")
-                os.system("start pcvoice.mp3")
+                tts.save("OCR_ConvertedVoice.mp3")
+                os.system("start OCR_ConvertedVoice.mp3")
 
 
 class FaceDetectionWidget(QtWidgets.QWidget):
