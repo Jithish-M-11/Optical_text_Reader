@@ -4,9 +4,7 @@ from os import path
 import cv2
 import numpy as np
 
-from PyQt5 import QtCore
-from PyQt5 import QtWidgets
-from PyQt5 import QtGui
+from PyQt5 import QtCore, QtWidgets, QtGui
 
 import pytesseract
 from PIL import Image
@@ -14,12 +12,17 @@ from pytesseract import image_to_string
 from gtts import gTTS
 import os
 
-# pytesseract.pytesseract.TesseractNotFoundError: tesseract is not installed or it's not in your path
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-
-# tessdata_dir_config = r'--tessdata-dir "<replace_with_your_tessdata_dir_path>"'
 tessdata_dir_config = r'--tessdata-dir "C:\Program Files\Tesseract-OCR\tessdata"'
 
+# Language mapping dictionary
+LANGUAGE_MAP = {
+    'English': 'en',
+    'Spanish': 'es',
+    'French': 'fr',
+    'German': 'de',
+    'Italian': 'it'
+}
 
 class RecordVideo(QtCore.QObject):
     image_data = QtCore.pyqtSignal(np.ndarray)
@@ -27,36 +30,32 @@ class RecordVideo(QtCore.QObject):
     def __init__(self, camera_port=0, parent=None):
         super().__init__(parent)
         self.camera = cv2.VideoCapture(camera_port)
-
         self.timer = QtCore.QBasicTimer()
 
     def start_recording(self):
         self.timer.start(0, self)
 
     def timerEvent(self, event):
-        if (event.timerId() != self.timer.timerId()):
+        if event.timerId() != self.timer.timerId():
             return
 
         read, data = self.camera.read()
         if read:
             self.image_data.emit(data)
 
-    def framesave(self):
-
+    def framesave(self, lang_code):
         read, data = self.camera.read()
         if read:
-            cv2.imwrite('a.png', data)
+            cv2.imwrite('optical_text_image.png', data)
             img = Image.fromarray(data)
             img.load()
 
             text = pytesseract.image_to_string(img, lang='eng', config=tessdata_dir_config)
             print('Text_Found: ', text, len(text))
             if len(text) > 0:
-                tts = gTTS(text=text, lang='en')  # for english language use (lang='en')
-                print(tts)
-                tts.save("pcvoice.mp3")
-                os.system("start pcvoice.mp3")
-
+                tts = gTTS(text=text, lang=lang_code)
+                tts.save("OCR_ConvertedVoice.mp3")
+                os.system("start OCR_ConvertedVoice.mp3")
 
 class FaceDetectionWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
@@ -70,7 +69,6 @@ class FaceDetectionWidget(QtWidgets.QWidget):
         self.image = self.get_qimage(image_data)
         if self.image.size() != self.size():
             self.setFixedSize(self.image.size())
-
         self.update()
 
     def get_qimage(self, image: np.ndarray):
@@ -78,12 +76,7 @@ class FaceDetectionWidget(QtWidgets.QWidget):
         bytesPerLine = 3 * width
         QImage = QtGui.QImage
 
-        image = QImage(image.data,
-                       width,
-                       height,
-                       bytesPerLine,
-                       QImage.Format_RGB888)
-
+        image = QImage(image.data, width, height, bytesPerLine, QImage.Format_RGB888)
         image = image.rgbSwapped()
         return image
 
@@ -92,44 +85,50 @@ class FaceDetectionWidget(QtWidgets.QWidget):
         painter.drawImage(0, 0, self.image)
         self.image = QtGui.QImage()
 
-
 class MainWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-
         self.face_detection_widget = FaceDetectionWidget()
 
-        # TODO: set video port
+        # Set video port
         self.record_video = RecordVideo()
 
         image_data_slot = self.face_detection_widget.image_data_slot
         self.record_video.image_data.connect(image_data_slot)
 
         layout = QtWidgets.QVBoxLayout()
-
         layout.addWidget(self.face_detection_widget)
+
+        # Start button
         self.run_button = QtWidgets.QPushButton('Start')
         layout.addWidget(self.run_button)
-
         self.run_button.clicked.connect(self.record_video.start_recording)
 
+        # Snapshot button
         self.screenshot = QtWidgets.QPushButton('Snap Shot')
         layout.addWidget(self.screenshot)
 
-        self.screenshot.clicked.connect(self.record_video.framesave)
+        # Language selection dropdown
+        self.language_select = QtWidgets.QComboBox()
+        for language in LANGUAGE_MAP.keys():
+            self.language_select.addItem(language)
+        layout.addWidget(self.language_select)
+
+        self.screenshot.clicked.connect(self.take_snapshot)
         self.setLayout(layout)
 
+    def take_snapshot(self):
+        selected_language = self.language_select.currentText()
+        lang_code = LANGUAGE_MAP[selected_language]
+        self.record_video.framesave(lang_code)
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-
     main_window = QtWidgets.QMainWindow()
     main_widget = MainWidget()
     main_window.setCentralWidget(main_widget)
     main_window.show()
-
     sys.exit(app.exec_())
-
 
 if __name__ == '__main__':
     main()
